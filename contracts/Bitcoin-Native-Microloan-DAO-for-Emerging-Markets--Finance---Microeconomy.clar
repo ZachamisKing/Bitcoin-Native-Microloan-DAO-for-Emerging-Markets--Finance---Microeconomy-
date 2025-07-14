@@ -3,6 +3,7 @@
 (define-constant ERR-LOAN-NOT-FOUND (err u102))
 (define-constant ERR-INVALID-AMOUNT (err u103))
 (define-constant ERR-LOAN-ACTIVE (err u104))
+(define-constant ERR-LOAN-NOT-COMPLETED (err u105))
 
 (define-data-var dao-treasury uint u0)
 (define-data-var min-collateral uint u1000000) ;; 0.01 BTC in sats
@@ -92,4 +93,15 @@
             { borrower: borrower }
             { score: new-score }
         )
+        (ok true)))
+
+(define-public (release-collateral (loan-id uint))
+    (let ((loan (unwrap! (map-get? loans { loan-id: loan-id }) ERR-LOAN-NOT-FOUND)))
+        (asserts! (is-eq (get borrower loan) tx-sender) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq (get status loan) "COMPLETED") ERR-LOAN-NOT-COMPLETED)
+        (map-set loans
+            { loan-id: loan-id }
+            (merge loan { status: "COLLATERAL_RELEASED" })
+        )
+        (try! (as-contract (stx-transfer? (get collateral loan) tx-sender (get borrower loan))))
         (ok true)))
