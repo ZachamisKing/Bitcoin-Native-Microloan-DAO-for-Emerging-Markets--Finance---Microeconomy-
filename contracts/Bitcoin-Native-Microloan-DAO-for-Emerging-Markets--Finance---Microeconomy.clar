@@ -4,10 +4,13 @@
 (define-constant ERR-INVALID-AMOUNT (err u103))
 (define-constant ERR-LOAN-ACTIVE (err u104))
 (define-constant ERR-LOAN-NOT-COMPLETED (err u105))
+(define-constant ERR-MAX-EXTENSIONS-REACHED (err u106))
 
 (define-data-var dao-treasury uint u0)
 (define-data-var min-collateral uint u1000000) ;; 0.01 BTC in sats
 (define-data-var interest-rate uint u500) ;; 5% represented as basis points
+(define-data-var extension-fee uint u100000) ;; 0.001 BTC in sats
+(define-data-var max-extensions uint u3)
 
 (define-map loans 
     { loan-id: uint }
@@ -24,6 +27,11 @@
 (define-map borrower-scores
     { borrower: principal }
     { score: uint }
+)
+
+(define-map loan-extensions
+    { loan-id: uint }
+    { extensions-used: uint }
 )
 
 (define-data-var loan-counter uint u0)
@@ -104,4 +112,23 @@
             (merge loan { status: "COLLATERAL_RELEASED" })
         )
         (try! (as-contract (stx-transfer? (get collateral loan) tx-sender (get borrower loan))))
+        (ok true)))
+
+(define-public (extend-loan (loan-id uint) (extension-duration uint))
+    (let ((loan (unwrap! (map-get? loans { loan-id: loan-id }) ERR-LOAN-NOT-FOUND))
+          (current-extensions (get extensions-used (default-to { extensions-used: u0 } 
+              (map-get? loan-extensions { loan-id: loan-id })))))
+        (asserts! (is-eq (get borrower loan) tx-sender) ERR-NOT-AUTHORIZED)
+        (asserts! (is-eq (get status loan) "ACTIVE") ERR-LOAN-NOT-FOUND)
+        (asserts! (< current-extensions (var-get max-extensions)) ERR-MAX-EXTENSIONS-REACHED)
+        (try! (stx-transfer? (var-get extension-fee) tx-sender (as-contract tx-sender)))
+        (map-set loans
+            { loan-id: loan-id }
+            (merge loan { due-date: (+ (get due-date loan) extension-duration) })
+        )
+        (map-set loan-extensions
+            { loan-id: loan-id }
+            { extensions-used: (+ current-extensions u1) }
+        )
+        (var-set dao-treasury (+ (var-get dao-treasury) (var-get extension-fee)))
         (ok true)))
