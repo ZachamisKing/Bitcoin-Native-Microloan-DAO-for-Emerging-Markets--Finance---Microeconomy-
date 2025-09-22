@@ -115,20 +115,33 @@
         (ok true)))
 
 (define-public (extend-loan (loan-id uint) (extension-duration uint))
-    (let ((loan (unwrap! (map-get? loans { loan-id: loan-id }) ERR-LOAN-NOT-FOUND))
-          (current-extensions (get extensions-used (default-to { extensions-used: u0 } 
-              (map-get? loan-extensions { loan-id: loan-id })))))
-        (asserts! (is-eq (get borrower loan) tx-sender) ERR-NOT-AUTHORIZED)
-        (asserts! (is-eq (get status loan) "ACTIVE") ERR-LOAN-NOT-FOUND)
-        (asserts! (< current-extensions (var-get max-extensions)) ERR-MAX-EXTENSIONS-REACHED)
-        (try! (stx-transfer? (var-get extension-fee) tx-sender (as-contract tx-sender)))
-        (map-set loans
-            { loan-id: loan-id }
-            (merge loan { due-date: (+ (get due-date loan) extension-duration) })
-        )
-        (map-set loan-extensions
-            { loan-id: loan-id }
-            { extensions-used: (+ current-extensions u1) }
-        )
-        (var-set dao-treasury (+ (var-get dao-treasury) (var-get extension-fee)))
-        (ok true)))
+     (let ((loan (unwrap! (map-get? loans { loan-id: loan-id }) ERR-LOAN-NOT-FOUND))
+           (current-extensions (get extensions-used (default-to { extensions-used: u0 }
+               (map-get? loan-extensions { loan-id: loan-id })))))
+         (asserts! (is-eq (get borrower loan) tx-sender) ERR-NOT-AUTHORIZED)
+         (asserts! (is-eq (get status loan) "ACTIVE") ERR-LOAN-NOT-FOUND)
+         (asserts! (< current-extensions (var-get max-extensions)) ERR-MAX-EXTENSIONS-REACHED)
+         (try! (stx-transfer? (var-get extension-fee) tx-sender (as-contract tx-sender)))
+         (map-set loans
+             { loan-id: loan-id }
+             (merge loan { due-date: (+ (get due-date loan) extension-duration) })
+         )
+         (map-set loan-extensions
+             { loan-id: loan-id }
+             { extensions-used: (+ current-extensions u1) }
+         )
+         (var-set dao-treasury (+ (var-get dao-treasury) (var-get extension-fee)))
+         (ok true)))
+
+(define-public (boost-collateral (loan-id uint) (additional-collateral uint))
+     (let ((loan (unwrap! (map-get? loans { loan-id: loan-id }) ERR-LOAN-NOT-FOUND))
+           (current-collateral (get collateral loan)))
+         (asserts! (is-eq (get borrower loan) tx-sender) ERR-NOT-AUTHORIZED)
+         (asserts! (is-eq (get status loan) "ACTIVE") ERR-LOAN-NOT-FOUND)
+         (asserts! (> additional-collateral u0) ERR-INVALID-AMOUNT)
+         (try! (stx-transfer? additional-collateral tx-sender (as-contract tx-sender)))
+         (map-set loans
+             { loan-id: loan-id }
+             (merge loan { collateral: (+ current-collateral additional-collateral) })
+         )
+         (ok true)))
