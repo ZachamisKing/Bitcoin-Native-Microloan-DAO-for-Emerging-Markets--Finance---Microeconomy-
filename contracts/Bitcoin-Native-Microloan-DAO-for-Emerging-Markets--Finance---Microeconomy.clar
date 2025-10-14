@@ -145,3 +145,10 @@
              (merge loan { collateral: (+ current-collateral additional-collateral) })
          )
          (ok true)))
+
+(define-public (deposit-to-treasury (amount uint))
+    (begin
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+        (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+        (var-set dao-treasury (+ (var-get dao-treasury) amount))
+        (ok true)))
